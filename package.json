@@ -7,7 +7,9 @@
     "enter": "node ./enter-container.js",
     "reset": "./bin/reset.sh && ./bin/purge.sh && ./bin/start.sh",
     "start": "./bin/start.sh",
-    "wp": "docker-compose -f dynamic-compose.yml exec -u www-data wordpress wp"
+    "wp": "docker-compose -f dynamic-compose.yml exec -u www-data wordpress wp",
+    "disable-xdebug": "docker-compose -f dynamic-compose.yml exec -u www-data wordpress set-xdebug-mode.sh off",
+    "enable-xdebug": "docker-compose -f dynamic-compose.yml exec -u www-data wordpress set-xdebug-mode.sh debug"
   },
   "repository": {
     "type": "git",

@@ -7,7 +7,7 @@ const INSTALL_SCRIPT_FILENAME = "wp-install-dynamic.sh";
 const generateConfig = () => {
   const config = getConfig();
   const wordpressEnvironment =  {
-          WORDPRESS_DB_HOST: "db",
+          WORDPRESS_DB_HOST: `${config.CONTAINER_NAME_PREFIX}_db`, // "db",
           WORDPRESS_DB_USER: "root",
           WORDPRESS_DB_PASSWORD: "root",
           WORDPRESS_DB_NAME: "wp_db",
@@ -15,14 +15,15 @@ const generateConfig = () => {
 
   const mappings = config.mappings
     ? Object.entries(config.mappings).map(([target, source]) => {
+        const mappingTarget = target === "/" ? '/var/www/html' : `/var/www/html/${target}`;
         return {
           type: "bind",
           source,
-          target: `/var/www/html/${target}`,
+          target: mappingTarget,
         };
       })
     : [];
-
+  
   if (config.multiSite) {
     if (config.WP_PORT !== 80) {
       console.error(`Multisite requires port 80, WP_PORT is set to ${config.WP_PORT}.`);
@@ -46,6 +47,14 @@ const generateConfig = () => {
     })
   }
 
+  if ( mappings.findIndex(s => s.target === '/var/www/html') === -1 ) {
+    mappings.push({
+            type: "volume",
+            source: "wp_data",
+            target: "/var/www/html",
+          });
+  }
+
   let wpHostName = config.WP_HOST_NAME;
   if (config.WP_PORT !== 80) {
      wpHostName += `:${config.WP_PORT}`;
@@ -56,21 +65,29 @@ const generateConfig = () => {
     services: {
       wordpress: {
         container_name: `${config.CONTAINER_NAME_PREFIX}_wordpress`,
-        image: "wordpress_debug:latest",
+        // image: "wordpress_debug:latest",
         restart: "always",
         ports: [`${config.WP_PORT}:80`],
+        build: {
+          context: './docker',
+          dockerfile: './wordpress/Dockerfile',
+          args: {
+            enablexdebug: config.enableXDebug ? 1 : 0
+          },
+        },
         environment: {
           ...wordpressEnvironment
         },
         volumes: [
           ...mappings,
-          {
-            type: "volume",
-            source: "wp_data",
-            target: "/var/www/html",
-          },
         ],
         depends_on: ["db"],
+        networks: [ "default" , "woocommerce" ]
+        // networks: {
+        //   default: {
+        //     aliases:[ "woocommerce.test" ]
+        //   }
+        // }
       },
       db: {
         container_name: `${config.CONTAINER_NAME_PREFIX}_db`,
@@ -84,6 +101,11 @@ const generateConfig = () => {
           MYSQL_PASSWORD: "password",
           MYSQL_ROOT_PASSWORD: "root",
         },
+        // networks: {
+        //   default: {
+        //     aliases:[ "wp_db" ]
+        //   }
+        // },
         volumes: ["db:/var/lib/mysql"],
       },
       "wordpress-cli": {
@@ -100,19 +122,28 @@ const generateConfig = () => {
         user: "xfs",
         command: `/usr/local/bin/${INSTALL_SCRIPT_FILENAME}`,
         volumes: [
-          ...mappings,
-          {
-            type: "volume",
-            source: "wp_data",
-            target: "/var/www/html",
-          },
-        ]
+          ...mappings
+        ],
+        // networks: {
+        //   default: {
+        //     aliases:[ "wp_dev_cli" ]
+        //   }
+        // }
       },
     },
     volumes: {
       db: null,
       wp_data: null,
     },
+    networks: {
+      // default: {
+      //   name: "wp_dev"
+      // },
+      woocommerce: {
+        external: true,
+        name: 'woocommerce.test'
+      }
+    }
   };
 };
 
